@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flappy Bird</title>
+<style>
+  canvas {
+    border: 1px solid black;
+    display: block;
+    margin: 0 auto;
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas" width="480" height="320"></canvas>
+<script>
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+
+  let bird = { x: 50, y: canvas.height / 2, radius: 20, velocity: 0, gravity: 0.5 };
+  let pipes = [];
+  let score = 0;
+  let gameInterval;
+
+  function drawBird() {
+    ctx.beginPath();
+    ctx.arc(bird.x, bird.y, bird.radius, 0, Math.PI * 2);
+    ctx.fillStyle = "yellow";
+    ctx.fill();
+    ctx.closePath();
+  }
+
+  function drawPipe(x, height) {
+    ctx.beginPath();
+    ctx.rect(x, 0, 50, height);
+    ctx.rect(x, height + 150, 50, canvas.height - height - 150);
+    ctx.fillStyle = "green";
+    ctx.fill();
+    ctx.closePath();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawBird();
+
+    for (let i = 0; i < pipes.length; i++) {
+      drawPipe(pipes[i].x, pipes[i].height);
+      pipes[i].x -= 2;
+
+      if (bird.x + bird.radius > pipes[i].x && bird.x - bird.radius < pipes[i].x + 50) {
+        if (bird.y - bird.radius < pipes[i].height || bird.y + bird.radius > pipes[i].height + 150) {
+          return gameOver();
+        }
+      }
+
+      if (pipes[i].x === bird.x - bird.radius) {
+        score++;
+      }
+    }
+
+    bird.y += bird.velocity;
+    bird.velocity += bird.gravity;
+
+    if (bird.y + bird.radius > canvas.height || bird.y - bird.radius < 0) {
+      return gameOver();
+    }
+
+    if (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 200) {
+      let height = Math.random() * (canvas.height - 200) + 50;
+      pipes.push({ x: canvas.width, height: height });
+    }
+
+    if (pipes[0].x + 50 < 0) {
+      pipes.shift();
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  function gameOver() {
+    clearInterval(gameInterval);
+    alert("Game Over. Your score: " + score);
+    location.reload();
+  }
+
+  document.addEventListener("keydown", function (event) {
+    if (event.keyCode === 32) {
+      bird.velocity = -8;
+    }
+  });
+
+  gameInterval = setInterval(draw, 10);
+</script>
+</body>
+</html>
