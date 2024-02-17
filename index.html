@@ -2,96 +2,249 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Flappy Bird</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Ultimate Hill Climb Game for iPad</title>
 <style>
-  canvas {
-    border: 1px solid black;
+  body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  #gameCanvas {
+    background-color: #87CEEB;
     display: block;
     margin: 0 auto;
   }
 </style>
 </head>
 <body>
-<canvas id="gameCanvas" width="480" height="320"></canvas>
+<canvas id="gameCanvas"></canvas>
+
+<audio id="jumpSound" src="jump.mp3"></audio>
+<audio id="collisionSound" src="collision.mp3"></audio>
+
 <script>
-  const canvas = document.getElementById("gameCanvas");
-  const ctx = canvas.getContext("2d");
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
 
-  let bird = { x: 50, y: canvas.height / 2, radius: 20, velocity: 0, gravity: 0.5 };
-  let pipes = [];
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  let car = {
+    x: 50,
+    y: canvas.height - 50,
+    width: 50,
+    height: 30,
+    speed: 5,
+    velocity: 0,
+    friction: 0.98,
+    gravity: 0.2,
+    jumping: false
+  };
+
+  let touching = false;
+  let obstacles = [];
+  let coins = [];
   let score = 0;
-  let gameInterval;
+  let coinsCollected = 0;
+  let highScore = localStorage.getItem('highScore') || 0;
+  let coinsSpent = 0;
+  let carUpgradeCost = 10;
 
-  function drawBird() {
-    ctx.beginPath();
-    ctx.arc(bird.x, bird.y, bird.radius, 0, Math.PI * 2);
-    ctx.fillStyle = "yellow";
-    ctx.fill();
-    ctx.closePath();
+  canvas.addEventListener('touchstart', function(event) {
+    touching = true;
+    playJumpSound();
+  });
+
+  canvas.addEventListener('touchend', function(event) {
+    touching = false;
+  });
+
+  function playJumpSound() {
+    const jumpSound = document.getElementById('jumpSound');
+    jumpSound.currentTime = 0;
+    jumpSound.play();
   }
 
-  function drawPipe(x, height) {
-    ctx.beginPath();
-    ctx.rect(x, 0, 50, height);
-    ctx.rect(x, height + 150, 50, canvas.height - height - 150);
-    ctx.fillStyle = "green";
-    ctx.fill();
-    ctx.closePath();
+  function playCollisionSound() {
+    const collisionSound = document.getElementById('collisionSound');
+    collisionSound.currentTime = 0;
+    collisionSound.play();
   }
 
-  function draw() {
+  function createObstacle() {
+    const obstacle = {
+      x: canvas.width,
+      y: canvas.height - 50 - Math.random() * 100,
+      width: 30 + Math.random() * 30,
+      height: 30 + Math.random() * 30,
+      speed: 5 + Math.random() * 3
+    };
+    obstacles.push(obstacle);
+  }
+
+  function createCoin() {
+    const coin = {
+      x: canvas.width,
+      y: canvas.height - 50 - Math.random() * 100,
+      width: 20,
+      height: 20,
+      speed: 5
+    };
+    coins.push(coin);
+  }
+
+  function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    drawBird();
+    if (touching && !car.jumping) {
+      car.velocity = -car.speed * 2;
+      car.jumping = true;
+    }
 
-    for (let i = 0; i < pipes.length; i++) {
-      drawPipe(pipes[i].x, pipes[i].height);
-      pipes[i].x -= 2;
+    car.velocity *= car.friction;
+    car.y -= car.velocity;
+    car.velocity += car.gravity;
 
-      if (bird.x + bird.radius > pipes[i].x && bird.x - bird.radius < pipes[i].x + 50) {
-        if (bird.y - bird.radius < pipes[i].height || bird.y + bird.radius > pipes[i].height + 150) {
-          return gameOver();
-        }
+    if (car.y > canvas.height - car.height) {
+      car.jumping = false;
+      car.y = canvas.height - car.height;
+    }
+
+    if (Math.random() < 0.02) {
+      createObstacle();
+    }
+
+    if (Math.random() < 0.01) {
+      createCoin();
+    }
+
+    obstacles.forEach(obstacle => {
+      obstacle.x -= obstacle.speed;
+
+      // Check collision with obstacles
+      if (
+        car.x < obstacle.x + obstacle.width &&
+        car.x + car.width > obstacle.x &&
+        car.y < obstacle.y + obstacle.height &&
+        car.y + car.height > obstacle.y
+      ) {
+        // Collision detected
+        gameOver();
       }
 
-      if (pipes[i].x === bird.x - bird.radius) {
+      if (obstacle.x + obstacle.width < 0) {
         score++;
+        obstacles.shift();
       }
-    }
 
-    bird.y += bird.velocity;
-    bird.velocity += bird.gravity;
+      drawObstacle(obstacle);
+    });
 
-    if (bird.y + bird.radius > canvas.height || bird.y - bird.radius < 0) {
-      return gameOver();
-    }
+    coins.forEach(coin => {
+      coin.x -= coin.speed;
 
-    if (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 200) {
-      let height = Math.random() * (canvas.height - 200) + 50;
-      pipes.push({ x: canvas.width, height: height });
-    }
+      // Check collision with coins
+      if (
+        car.x < coin.x + coin.width &&
+        car.x + car.width > coin.x &&
+        car.y < coin.y + coin.height &&
+        car.y + car.height > coin.y
+      ) {
+        // Coin collected
+        coinsCollected++;
+        coins.shift();
+      }
 
-    if (pipes[0].x + 50 < 0) {
-      pipes.shift();
-    }
+      drawCoin(coin);
+    });
 
-    requestAnimationFrame(draw);
+    drawCar();
+    drawScore();
+    drawCoinsCollected();
+    drawHighScore();
+    drawUpgradeButton();
+
+    requestAnimationFrame(gameLoop);
   }
 
-  function gameOver() {
-    clearInterval(gameInterval);
-    alert("Game Over. Your score: " + score);
-    location.reload();
+  function drawCar() {
+    ctx.fillStyle = 'red';
+    ctx.fillRect(car.x, car.y, car.width, car.height);
   }
 
-  document.addEventListener("keydown", function (event) {
-    if (event.keyCode === 32) {
-      bird.velocity = -8;
+  function drawObstacle(obstacle) {
+    ctx.fillStyle = 'green';
+    ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+  }
+
+  function drawCoin(coin) {
+    ctx.fillStyle = 'gold';
+    ctx.beginPath();
+    ctx.arc(coin.x, coin.y, coin.width / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawScore() {
+    ctx.fillStyle = 'black';
+    ctx.font = '24px Arial';
+    ctx.fillText('Score: ' + score, 10, 30);
+  }
+
+  function drawCoinsCollected() {
+    ctx.fillStyle = 'black';
+    ctx.font = '24px Arial';
+    ctx.fillText('Coins: ' + coinsCollected, 10, 60);
+  }
+
+  function drawHighScore() {
+    ctx.fillStyle = 'black';
+    ctx.font = '24px Arial';
+    ctx.fillText('High Score: ' + highScore, 10, 90);
+  }
+
+  function drawUpgradeButton() {
+    ctx.fillStyle = 'blue';
+    ctx.fillRect(canvas.width - 150, canvas.height - 70, 120, 40);
+    ctx.fillStyle = 'white';
+    ctx.font = '20px Arial';
+    ctx.fillText('Upgrade Car', canvas.width - 140, canvas.height - 40);
+    ctx.fillText('Cost: ' + carUpgradeCost + ' Coins', canvas.width - 140, canvas.height - 10);
+  }
+
+  canvas.addEventListener('click', function(event) {
+    const rect = canvas.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    if (clickX >= canvas.width - 150 && clickX <= canvas.width - 30 && clickY >= canvas.height - 70 && clickY <= canvas.height - 30) {
+      if (coinsCollected >= carUpgradeCost) {
+        carUpgradeCost *= 2;
+        coinsSpent += carUpgradeCost;
+        coinsCollected -= carUpgradeCost;
+        car.speed += 2;
+        alert('Car upgraded! Speed increased.');
+      } else {
+        alert('Not enough coins to upgrade car.');
+      }
     }
   });
 
-  gameInterval = setInterval(draw, 10);
+  function gameOver() {
+    playCollisionSound();
+    alert('Game Over! Your score: ' + score);
+    if (score > highScore) {
+      highScore = score;
+      localStorage.setItem('highScore', highScore);
+    }
+    score = 0;
+    coinsCollected = 0;
+    car.y = canvas.height - 50;
+    obstacles = [];
+    coins = [];
+  }
+
+  gameLoop();
 </script>
 </body>
 </html>
